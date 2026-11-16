@@ -909,7 +909,7 @@ function Login({ onLogin }) {
         <button className="submit-btn login-submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}<ArrowRight size={17} /></button>
       </form>
       {isSupabaseConfigured
-        ? <div className="demo-hint"><b>Supabase mode</b><span> · Use an account in the configured database. New setup? Run supabase/schema.sql.</span></div>
+        ? <div className="demo-hint"><b>Supabase mode</b><span> use your STUDENT IDS </span></div>
         : <div className="demo-hint"><b>Demo mode</b><span> · STU001 / student123 · LEC001 / lecturer123 · ADMIN001 / admin123</span></div>}
       <footer className="login-copyright">© 2026 University College of Batangala</footer>
     </section>

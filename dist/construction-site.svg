@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="960" y1="0" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#41617A"/>
+      <stop offset="1" stop-color="#172D43"/>
+    </linearGradient>
+    <linearGradient id="building" x1="1120" y1="360" x2="1120" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#92A5B0"/>
+      <stop offset="1" stop-color="#536B7A"/>
+    </linearGradient>
+    <pattern id="windows" width="104" height="92" patternUnits="userSpaceOnUse">
+      <path d="M17 15h64v55H17z" fill="#233F55"/>
+      <path d="M48 15v55" stroke="#718A99" stroke-width="5"/>
+      <path d="M17 44h64" stroke="#718A99" stroke-width="5"/>
+    </pattern>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1920v1080H0z"/>
+  <circle cx="1420" cy="210" r="115" fill="#F59E0B" fill-opacity=".72"/>
+  <path fill="#29465C" d="M0 640h225V430h175v210h112V520h229v120h106V384h180v256h87V485h180v155h119V420h169v220h141v440H0z"/>
+  <path fill="#192F44" d="M0 760h1920v320H0z"/>
+  <path fill="url(#building)" d="M748 360h630l137 95v585H748z"/>
+  <path fill="#879DAA" d="M1378 360l137 95H886l-138-95z"/>
+  <path fill="url(#windows)" d="M790 464h545v530H790z"/>
+  <path stroke="#D8E0E2" stroke-opacity=".62" stroke-width="15" d="M748 450h767M748 590h767M748 730h767M748 870h767M748 1000h767"/>
+  <path stroke="#D8E0E2" stroke-opacity=".58" stroke-width="13" d="M920 410v584m175-584v584m174-584v584"/>
+  <path stroke="#F59E0B" stroke-width="18" d="M1050 360V80h555M1050 102h-260"/>
+  <path stroke="#F59E0B" stroke-width="10" d="M1050 80l-145 60h145l145 62h-145m345-122-86 62h86"/>
+  <path stroke="#F59E0B" stroke-width="9" d="M1580 80v126m-25 0h50"/>
+  <path stroke="#F59E0B" stroke-width="12" d="M790 388h-40v-94h405"/>
+  <path stroke="#F59E0B" stroke-width="8" d="M790 294l-95 54h95m0-54 95 54h-95"/>
+  <path stroke="#F59E0B" stroke-width="7" d="M1155 294v90m-21 0h42"/>
+  <path fill="#F59E0B" fill-opacity=".9" d="M0 1000h1920v80H0z"/>
+  <path stroke="#B6C5CE" stroke-opacity=".23" stroke-width="3" d="M0 1040h1920M0 1018h1920"/>
+  <path fill="#101F30" fill-opacity=".3" d="M0 0h1920v1080H0z"/>
+</svg>

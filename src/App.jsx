@@ -401,14 +401,40 @@ function App() {
     })
   }
 
-  async function submitMutation(action, payload, assignmentFile, previousPdfUrl) {
-    if (!['assignment_create', 'assignment_update'].includes(action) || !assignmentFile) {
+  async function submitMutation(action, payload, assignmentFile, previousPdfUrl, uploadedFile) {
+    if (!['assignment_create', 'assignment_update'].includes(action) && !['note_create', 'note_update', 'assignment_info_create', 'assignment_info_update'].includes(action)) {
       return perform(action, payload)
     }
     if (!isSupabaseConfigured || !supabase) {
-      setNotice('Supabase must be configured to upload an assignment PDF.')
+      setNotice('Supabase must be configured to upload files.')
       return false
     }
+
+    if (['note_create', 'note_update', 'assignment_info_create', 'assignment_info_update'].includes(action) && uploadedFile) {
+      const isInfo = action.startsWith('assignment_info_')
+      const bucket = isInfo ? 'assignment-information-files' : 'lecture-notes-pdfs'
+      const folder = isInfo ? `assignment-information/${payload.assignment_id || 'general'}` : 'lecture-notes'
+      const originalName = uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '-').trim()
+      const storagePath = `${folder}/${crypto.randomUUID()}-${originalName}`
+      const { data: uploaded, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, uploadedFile, {
+          contentType: uploadedFile.type || 'application/octet-stream',
+          upsert: false,
+        })
+      if (uploadError) {
+        console.error('File upload failed:', uploadError)
+        setNotice(`Couldn't upload file: ${uploadError.message}`)
+        return false
+      }
+      const { data: publicFile } = supabase.storage.from(bucket).getPublicUrl(uploaded.path)
+      payload.file_url = publicFile.publicUrl
+      payload.file_name = uploadedFile.name
+      payload.file_type = uploadedFile.type
+      delete payload.file_data
+      return perform(action, payload)
+    }
+    if (!assignmentFile) return perform(action, payload)
 
     const originalName = assignmentFile.name.replace(/[^a-zA-Z0-9._-]/g, '-').trim()
     const baseName = originalName.replace(/\.pdf$/i, '') || 'assignment'
@@ -466,6 +492,10 @@ function App() {
   }
 
   async function downloadLectureNote(item) {
+    if (item.file_url) {
+      window.open(item.file_url, '_blank', 'noopener,noreferrer')
+      return
+    }
     let fileData = item.file_data
     if (isSupabaseConfigured && !item.file_url) {
       const { data: result, error } = await supabase.rpc('hub_download_note', {
@@ -482,6 +512,10 @@ function App() {
   }
 
   async function downloadAssignmentInformation(item) {
+    if (item.file_url) {
+      window.open(item.file_url, '_blank', 'noopener,noreferrer')
+      return
+    }
     let fileData = item.file_data
     if (isSupabaseConfigured) {
       const { data: result, error } = await supabase.rpc('hub_download_assignment_info_file', {
@@ -651,8 +685,8 @@ function App() {
         role={role}
         user={user}
         onClose={() => setModal(null)}
-        onSubmit={async (action, payload, assignmentFile, previousPdfUrl) => {
-          const ok = await submitMutation(action, payload, assignmentFile, previousPdfUrl)
+        onSubmit={async (action, payload, assignmentFile, previousPdfUrl, uploadedFile) => {
+          const ok = await submitMutation(action, payload, assignmentFile, previousPdfUrl, uploadedFile)
           if (ok) setModal(null)
           return ok
         }}
@@ -1358,7 +1392,6 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
       if (modal.kind === 'Lecture Note') {
         action = item.id ? 'note_update' : 'note_create'
         payload = { ...values, id: item.id }
-        if (file) payload.file_data = await fileAsDataUrl(file)
       } else if (modal.kind === 'Assignment') {
         action = item.id ? 'assignment_update' : 'assignment_create'
         payload = { ...values, id: item.id || crypto.randomUUID(), type: item.type || values.type, duration_minutes: Number(values.duration_minutes || 15), options: String(values.options || '').split('\n').map((option) => option.trim()).filter(Boolean) }
@@ -1372,7 +1405,6 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
           reference_links: String(values.reference_links || '').split('\n').map((reference) => reference.trim()).filter(Boolean),
         }
         if (file) {
-          payload.file_data = await fileAsDataUrl(file)
           payload.file_name = file.name
           payload.file_type = file.type
         }
@@ -1405,7 +1437,8 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
       }
       const assignmentPdf = modal.kind === 'Assignment' && payload.type !== 'quiz' ? file : null
       setUploadingPdf(Boolean(assignmentPdf))
-      await onSubmit(action, payload, assignmentPdf, item.pdf_url)
+      const uploadedFile = modal.kind === 'Lecture Note' || modal.kind === 'Assignment Information' ? file : null
+      await onSubmit(action, payload, assignmentPdf, item.pdf_url, uploadedFile)
     } catch (error) {
       setFileError(error.message)
     } finally {

@@ -84,6 +84,7 @@ alter table public.lecture_notes add column if not exists semester text not null
 alter table public.lecture_notes add column if not exists file_data text not null default '';
 alter table public.lecture_notes add column if not exists description text not null default '';
 alter table public.lecture_notes add column if not exists uploaded_at timestamptz not null default now();
+alter table public.lecture_notes add column if not exists file_url text;
 alter table public.lecture_notes add column if not exists uploaded_by text references public.users(id) on delete set null;
 alter table public.lecture_notes add column if not exists created_at timestamptz not null default now();
 update public.lecture_notes set subject = 'Foundation Period'
@@ -134,6 +135,7 @@ alter table public.assignment_information add column if not exists reference_lin
 alter table public.assignment_information add column if not exists file_data text not null default '';
 alter table public.assignment_information add column if not exists file_name text not null default '';
 alter table public.assignment_information add column if not exists file_type text not null default '';
+alter table public.assignment_information add column if not exists file_url text;
 alter table public.assignment_information add column if not exists created_by text references public.users(id) on delete set null;
 alter table public.assignment_information add column if not exists created_at timestamptz not null default now();
 create index if not exists assignment_information_assignment_created_idx
@@ -335,6 +337,36 @@ drop policy if exists "assignment files delete unreferenced" on storage.objects;
 create policy "assignment files delete unreferenced" on storage.objects
   for delete to anon, authenticated
   using (bucket_id = 'assignment-files' and public.assignment_storage_object_is_unreferenced(name));
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('lecture-notes-pdfs', 'lecture-notes-pdfs', true, null)
+on conflict (id) do update set
+  name = excluded.name,
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+drop policy if exists "lecture notes pdf public read" on storage.objects;
+create policy "lecture notes pdf public read" on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'lecture-notes-pdfs');
+drop policy if exists "lecture notes pdf upload" on storage.objects;
+create policy "lecture notes pdf upload" on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'lecture-notes-pdfs');
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('assignment-information-files', 'assignment-information-files', true, null)
+on conflict (id) do update set
+  name = excluded.name,
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+drop policy if exists "assignment information public read" on storage.objects;
+create policy "assignment information public read" on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'assignment-information-files');
+drop policy if exists "assignment information upload" on storage.objects;
+create policy "assignment information upload" on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'assignment-information-files');
 
 create table if not exists public.diary (
   id text primary key default gen_random_uuid()::text,
@@ -655,7 +687,7 @@ declare
 begin
   perform 1 from public.hub_session_user(p_token);
   if not found then raise exception 'Session expired. Sign in again.'; end if;
-  select n.file_data into v_file_data from public.lecture_notes n where n.id::text = p_note_id;
+  select coalesce(nullif(n.file_url, ''), n.file_data) into v_file_data from public.lecture_notes n where n.id::text = p_note_id;
   if not found then raise exception 'Lecture note was not found.'; end if;
   return coalesce(v_file_data, '');
 end;
@@ -674,7 +706,7 @@ declare
 begin
   perform 1 from public.hub_session_user(p_token);
   if not found then raise exception 'Session expired. Sign in again.'; end if;
-  select i.file_data into v_file_data from public.assignment_information i where i.id::text = p_information_id;
+  select coalesce(nullif(i.file_url, ''), i.file_data) into v_file_data from public.assignment_information i where i.id::text = p_information_id;
   if not found then raise exception 'Assignment information was not found.'; end if;
   if coalesce(v_file_data, '') = '' then raise exception 'This information has no attached file.'; end if;
   return v_file_data;
@@ -767,18 +799,20 @@ begin
   elsif p_action = 'note_create' then
     if p_payload->>'subject' not in ('Foundation Period', 'English', 'Maths', 'Physics') then raise exception 'Choose a valid lecture-note subject.'; end if;
     if p_payload->>'semester' not in ('Semester 1', 'Semester 2') then raise exception 'Choose a valid semester.'; end if;
-    if coalesce(p_payload->>'file_data', '') not like 'data:application/pdf;base64,%' then raise exception 'Attach a PDF file to this lecture note.'; end if;
-    insert into public.lecture_notes (title, subject, semester, description, file_data, uploaded_by)
-    values (p_payload->>'title', p_payload->>'subject', p_payload->>'semester', coalesce(p_payload->>'description', ''), p_payload->>'file_data', v_user_id);
+    if coalesce(p_payload->>'file_url', '') = '' and coalesce(p_payload->>'file_data', '') not like 'data:application/pdf;base64,%' then raise exception 'Attach a PDF file to this lecture note.'; end if;
+    insert into public.lecture_notes (title, subject, semester, description, file_data, file_url, uploaded_by)
+    values (p_payload->>'title', p_payload->>'subject', p_payload->>'semester', coalesce(p_payload->>'description', ''),
+      case when p_payload->>'file_url' is null then coalesce(p_payload->>'file_data', '') else '' end,
+      nullif(p_payload->>'file_url', ''), v_user_id);
   elsif p_action = 'note_update' then
     if p_payload->>'subject' not in ('Foundation Period', 'English', 'Maths', 'Physics') then raise exception 'Choose a valid lecture-note subject.'; end if;
     if p_payload->>'semester' not in ('Semester 1', 'Semester 2') then raise exception 'Choose a valid semester.'; end if;
-    if p_payload ? 'file_data' and p_payload->>'file_data' not like 'data:application/pdf;base64,%' then raise exception 'Attach a valid PDF file.'; end if;
     update public.lecture_notes set title = p_payload->>'title', subject = p_payload->>'subject',
       semester = p_payload->>'semester', description = coalesce(p_payload->>'description', ''),
-      file_data = coalesce(p_payload->>'file_data', file_data),
-      uploaded_at = case when p_payload ? 'file_data' then now() else uploaded_at end,
-      uploaded_by = case when p_payload ? 'file_data' then v_user_id else uploaded_by end
+      file_data = case when p_payload ? 'file_url' then '' else coalesce(p_payload->>'file_data', file_data) end,
+      file_url = case when p_payload ? 'file_url' then nullif(p_payload->>'file_url', '') else file_url end,
+      uploaded_at = case when p_payload ? 'file_url' or p_payload ? 'file_data' then now() else uploaded_at end,
+      uploaded_by = case when p_payload ? 'file_url' or p_payload ? 'file_data' then v_user_id else uploaded_by end
     where id::text = p_payload->>'id';
     if not found then raise exception 'Lecture note was not found.'; end if;
   elsif p_action = 'note_delete' then
@@ -793,14 +827,16 @@ begin
       raise exception 'Important points and reference links must be lists.';
     end if;
     if coalesce(p_payload->>'file_data', '') <> ''
+       and coalesce(p_payload->>'file_url', '') = ''
        and coalesce(p_payload->>'file_data', '') not like 'data:application/pdf;base64,%'
        and coalesce(p_payload->>'file_data', '') !~ '^data:image/[a-zA-Z0-9.+-]+;base64,' then
       raise exception 'Attach a PDF or image file.';
     end if;
-    insert into public.assignment_information (assignment_id, title, details, important_points, reference_links, file_data, file_name, file_type, created_by)
+    insert into public.assignment_information (assignment_id, title, details, important_points, reference_links, file_data, file_url, file_name, file_type, created_by)
     select a.id, trim(p_payload->>'title'), p_payload->>'details',
       coalesce(p_payload->'important_points', '[]'::jsonb), coalesce(p_payload->'reference_links', '[]'::jsonb),
-      coalesce(p_payload->>'file_data', ''), coalesce(p_payload->>'file_name', ''), coalesce(p_payload->>'file_type', ''), v_user_id
+      case when p_payload->>'file_url' is null then coalesce(p_payload->>'file_data', '') else '' end,
+      nullif(p_payload->>'file_url', ''), coalesce(p_payload->>'file_name', ''), coalesce(p_payload->>'file_type', ''), v_user_id
     from public.assignments a where a.id::text = p_payload->>'assignment_id';
     if not found then raise exception 'Assignment was not found.'; end if;
   elsif p_action = 'assignment_info_update' then
@@ -810,9 +846,10 @@ begin
     update public.assignment_information set title = trim(p_payload->>'title'), details = p_payload->>'details',
       important_points = coalesce(p_payload->'important_points', '[]'::jsonb),
       reference_links = coalesce(p_payload->'reference_links', '[]'::jsonb),
-      file_data = case when p_payload ? 'file_data' then p_payload->>'file_data' when p_payload ? 'remove_file' then '' else file_data end,
-      file_name = case when p_payload ? 'file_data' then coalesce(p_payload->>'file_name', '') when p_payload ? 'remove_file' then '' else file_name end,
-      file_type = case when p_payload ? 'file_data' then coalesce(p_payload->>'file_type', '') when p_payload ? 'remove_file' then '' else file_type end
+      file_data = case when p_payload ? 'file_url' then '' when p_payload ? 'file_data' then p_payload->>'file_data' when p_payload ? 'remove_file' then '' else file_data end,
+      file_url = case when p_payload ? 'file_url' then nullif(p_payload->>'file_url', '') when p_payload ? 'remove_file' then null else file_url end,
+      file_name = case when p_payload ? 'file_url' or p_payload ? 'file_data' then coalesce(p_payload->>'file_name', '') when p_payload ? 'remove_file' then '' else file_name end,
+      file_type = case when p_payload ? 'file_url' or p_payload ? 'file_data' then coalesce(p_payload->>'file_type', '') when p_payload ? 'remove_file' then '' else file_type end
     where id::text = p_payload->>'id';
     if not found then raise exception 'Assignment information was not found.'; end if;
   elsif p_action = 'assignment_info_delete' then

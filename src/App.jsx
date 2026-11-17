@@ -1436,11 +1436,9 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
       event.target.value = ''
       return
     }
-    const maxSize = modal.kind === 'Lecture Note' || isAssignmentInformation
-        ? 5 * 1024 * 1024
-        : 4 * 1024 * 1024
-    if (modal.kind !== 'Assignment' && selected.size > maxSize) {
-        setFileError(`File must be smaller than ${maxSize / 1024 / 1024} MB.`)
+    const maxSize = isDiary ? 4 * 1024 * 1024 : null
+    if (maxSize && selected.size > maxSize) {
+      setFileError(`File must be smaller than ${maxSize / 1024 / 1024} MB.`)
       setFile(null)
       event.target.value = ''
       return
@@ -1478,7 +1476,7 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
           <Field label="Details / description" name="details" as="textarea" defaultValue={item.details} placeholder="Add the full instructions or context for students." required />
           <Field label="Important points (one per line)" name="important_points" as="textarea" defaultValue={Array.isArray(item.important_points) ? item.important_points.join('\n') : ''} placeholder="Each line becomes a bullet point." />
           <Field label="Reference links (one URL per line)" name="reference_links" as="textarea" defaultValue={Array.isArray(item.reference_links) ? item.reference_links.join('\n') : ''} placeholder="https://example.com/reference" />
-          <label className="upload-field"><Upload size={17} /><span>{file?.name || (item.file_name ? `Current file: ${item.file_name}` : 'Attach PDF or image (optional)')} · Max 5 MB<input type="file" accept="application/pdf,image/*,.pdf" onChange={selectFile} /></span></label>
+          <label className="upload-field"><Upload size={17} /><span>{file?.name || (item.file_name ? `Current file: ${item.file_name}` : 'Attach PDF or image (optional)')}<input type="file" accept="application/pdf,image/*,.pdf" onChange={selectFile} /></span></label>
           {item.file_name && <label className="remove-attachment-field"><input type="checkbox" name="remove_file" /> Remove current attachment</label>}
           <p className="form-hint">Date Added is recorded automatically when you save.</p>
         </>}

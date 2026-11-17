@@ -289,7 +289,7 @@ create policy "student notes pdf upload" on storage.objects
   with check (bucket_id = 'student-notes-pdfs');
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('assignment-files', 'assignment-files', true, 10485760, array['application/pdf'])
+values ('assignment-files', 'assignment-files', true, null, array['application/pdf'])
 on conflict (id) do update set
   name = excluded.name,
   public = excluded.public,
@@ -767,14 +767,12 @@ begin
   elsif p_action = 'note_create' then
     if p_payload->>'subject' not in ('Foundation Period', 'English', 'Maths', 'Physics') then raise exception 'Choose a valid lecture-note subject.'; end if;
     if p_payload->>'semester' not in ('Semester 1', 'Semester 2') then raise exception 'Choose a valid semester.'; end if;
-    if length(coalesce(p_payload->>'file_data', '')) > 7200000 then raise exception 'PDF exceeds the upload size limit.'; end if;
     if coalesce(p_payload->>'file_data', '') not like 'data:application/pdf;base64,%' then raise exception 'Attach a PDF file to this lecture note.'; end if;
     insert into public.lecture_notes (title, subject, semester, description, file_data, uploaded_by)
     values (p_payload->>'title', p_payload->>'subject', p_payload->>'semester', coalesce(p_payload->>'description', ''), p_payload->>'file_data', v_user_id);
   elsif p_action = 'note_update' then
     if p_payload->>'subject' not in ('Foundation Period', 'English', 'Maths', 'Physics') then raise exception 'Choose a valid lecture-note subject.'; end if;
     if p_payload->>'semester' not in ('Semester 1', 'Semester 2') then raise exception 'Choose a valid semester.'; end if;
-    if length(coalesce(p_payload->>'file_data', '')) > 7200000 then raise exception 'PDF exceeds the upload size limit.'; end if;
     if p_payload ? 'file_data' and p_payload->>'file_data' not like 'data:application/pdf;base64,%' then raise exception 'Attach a valid PDF file.'; end if;
     update public.lecture_notes set title = p_payload->>'title', subject = p_payload->>'subject',
       semester = p_payload->>'semester', description = coalesce(p_payload->>'description', ''),
@@ -794,7 +792,6 @@ begin
        or jsonb_typeof(coalesce(p_payload->'reference_links', '[]'::jsonb)) <> 'array' then
       raise exception 'Important points and reference links must be lists.';
     end if;
-    if length(coalesce(p_payload->>'file_data', '')) > 7200000 then raise exception 'Attachment exceeds the 5 MB limit.'; end if;
     if coalesce(p_payload->>'file_data', '') <> ''
        and coalesce(p_payload->>'file_data', '') not like 'data:application/pdf;base64,%'
        and coalesce(p_payload->>'file_data', '') !~ '^data:image/[a-zA-Z0-9.+-]+;base64,' then

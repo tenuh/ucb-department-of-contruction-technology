@@ -908,9 +908,7 @@ function Login({ onLogin }) {
         {error && <div className="form-error">{error}</div>}
         <button className="submit-btn login-submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}<ArrowRight size={17} /></button>
       </form>
-      {isSupabaseConfigured
-        ? <div className="demo-hint"><b>Supabase mode</b><span> use your STUDENT IDS </span></div>
-        : <div className="demo-hint"><b>Demo mode</b><span> · STU001 / student123 · LEC001 / lecturer123 · ADMIN001 / admin123</span></div>}
+      {!isSupabaseConfigured && <div className="demo-hint"><b>Demo mode</b><span> · STU001 / student123 · LEC001 / lecturer123 · ADMIN001 / admin123</span></div>}
       <footer className="login-copyright">© 2026 University College of Batangala</footer>
     </section>
   </div>
@@ -1438,13 +1436,11 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
       event.target.value = ''
       return
     }
-    const maxSize = modal.kind === 'Assignment'
-      ? 10 * 1024 * 1024
-      : modal.kind === 'Lecture Note' || isAssignmentInformation
+    const maxSize = modal.kind === 'Lecture Note' || isAssignmentInformation
         ? 5 * 1024 * 1024
         : 4 * 1024 * 1024
-    if (selected.size > maxSize) {
-      setFileError(modal.kind === 'Assignment' ? 'Assignment PDF must be 10 MB or smaller.' : `File must be smaller than ${maxSize / 1024 / 1024} MB.`)
+    if (modal.kind !== 'Assignment' && selected.size > maxSize) {
+        setFileError(`File must be smaller than ${maxSize / 1024 / 1024} MB.`)
       setFile(null)
       event.target.value = ''
       return
@@ -1470,7 +1466,7 @@ function RecordModal({ modal, role, user, onClose, onSubmit, onNotice }) {
           <SelectField label="Type" name="type" defaultValue={item.type || 'assignment'} options={['assignment', 'quiz']} disabled={Boolean(item.id)} onChange={setAssignmentType} />
           <Field label="Due date" name="due_date" type="date" defaultValue={String(item.due_date || '').slice(0, 10)} required />
           {assignmentType !== 'quiz' && <>
-            <label className="upload-field assignment-pdf-upload"><Upload size={17} /><span>{file?.name || (item.pdf_name ? `Replace: ${item.pdf_name} · Optional · Max 10 MB` : 'Assignment Details PDF (Optional) · Max 10 MB')}<input type="file" accept=".pdf,application/pdf" onChange={selectFile} /></span></label>
+            <label className="upload-field assignment-pdf-upload"><Upload size={17} /><span>{file?.name || (item.pdf_name ? `Replace: ${item.pdf_name} · Optional` : 'Assignment Details PDF (Optional)')}<input type="file" accept=".pdf,application/pdf" onChange={selectFile} /></span></label>
             {uploadingPdf && <div className="assignment-upload-progress" role="status"><span />Uploading PDF and saving assignment…</div>}
           </>}
           {assignmentType === 'quiz' && <><Field label="Duration in minutes" name="duration_minutes" type="number" defaultValue={item.duration_minutes || 15} min="1" required /><Field label="Question" name="question" defaultValue={item.question} required /><Field label="Options (one per line)" name="options" as="textarea" defaultValue={Array.isArray(item.options) ? item.options.join('\n') : ''} required /></>}
